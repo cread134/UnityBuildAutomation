@@ -1,18 +1,29 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static System.Net.WebRequestMethods;
+﻿using Newtonsoft.Json;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace UnityBuildAutomation
 {
     internal class ConfigurationManager
     {
-        public const string RemoteRepositoryPath = "https://github.com/cread134/DSA_Assignment1";
-        public const string RemoteRepositoryName = "PDT_2023_ArmlessSamurai";
+        static string ConfigurationPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "configuration.json");
+        public static Configuration LoadConfiguration()
+        {
+            if (!File.Exists(ConfigurationPath))
+            {
+                throw new FileNotFoundException("Configuration file not found.", ConfigurationPath);
+            }
 
-        public static string RepositoryRootDirectory => Path.Combine("C:", "git", "UnityBuildAutomation", "source");
-        public static string RepositoryRootPath => Path.Combine(RepositoryRootDirectory, RemoteRepositoryName);
+            var configuration = JsonConvert.DeserializeObject<Configuration>(File.ReadAllText(ConfigurationPath));
+            if (configuration == null)
+            {
+                throw new Exception("Configuration file is empty.");
+            }
+            return configuration;
+        }
+
+        public static void SaveConfiguration(Configuration configuration)
+        {
+            File.WriteAllText(ConfigurationPath, JsonConvert.SerializeObject(configuration, Formatting.Indented));
+        }
     }
 }

@@ -10,23 +10,30 @@ namespace UnityBuildAutomation.SourceControl
     public enum SourceControlResult { Success, Failure }
     internal class ApplicationSourceControl
     {
-        public static bool DoesRepositoryExist()
+        private readonly Configuration configuration;
+
+        public ApplicationSourceControl(Configuration configuration)
         {
-            return Directory.Exists(ConfigurationManager.RepositoryRootPath)
-                && Directory.Exists(Path.Combine(ConfigurationManager.RepositoryRootPath, ".git"));
+            this.configuration = configuration;
+        }
+
+        public bool DoesRepositoryExist()
+        {
+            return Directory.Exists(configuration.RepositoryRootPath)
+                && Directory.Exists(Path.Combine(configuration.RepositoryRootPath, ".git"));
         }
 
         public async Task<SourceControlResult> CloneRepository()
         {
-            if (Directory.Exists(ConfigurationManager.RepositoryRootPath))
+            if (Directory.Exists(configuration.RepositoryRootPath))
             {
-                Directory.CreateDirectory(ConfigurationManager.RepositoryRootPath);
+                Directory.CreateDirectory(configuration.RepositoryRootPath);
             }
 
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = "git",
-                Arguments = $"clone {ConfigurationManager.RemoteRepositoryPath} {ConfigurationManager.RepositoryRootPath}\\",
+                Arguments = $"clone {configuration.RemoteRepositoryPath} {configuration.RepositoryRootPath}\\",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
