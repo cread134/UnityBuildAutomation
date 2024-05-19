@@ -19,32 +19,46 @@ namespace UnityBuildAutomation.SourceControl
 
         public bool DoesRepositoryExist()
         {
-            return Directory.Exists(configuration.RepositoryRootPath)
-                && Directory.Exists(Path.Combine(configuration.RepositoryRootPath, ".git"));
+            if (!Directory.Exists(configuration.GetTargetRepoPath()))
+            {
+                return false;
+            }
+            return File.Exists(Path.Combine(configuration.GetTargetRepoPath(), ".gitattributes"));
         }
 
-        public async Task<SourceControlResult> CloneRepository()
+        async Task<(SourceControlResult sourceControlResult, List<string> outputResults)> RunGitProcess(string arguments)
         {
-            if (Directory.Exists(configuration.RepositoryRootPath))
-            {
-                Directory.CreateDirectory(configuration.RepositoryRootPath);
-            }
-
+            var outputResults = new List<string>();
+            Console.WriteLine($"Running git {arguments}");
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = "git",
-                Arguments = $"clone {configuration.RemoteRepositoryPath} {configuration.RepositoryRootPath}\\",
+                Arguments = arguments,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
             using var process = new Process { StartInfo = processStartInfo };
-            process.OutputDataReceived += OnOutputDataReceived;
+            process.OutputDataReceived += (sender, e) => 
+            {
+                if (e.Data == null)
+                {
+                    return;
+                }
+                OnOutputDataReceived(sender, e);
+                outputResults.Add(e.Data);
+            };
+
+            bool errror = false;
             process.ErrorDataReceived += (sender, e) =>
             {
-                OnErrorDataReceived(sender, e);
-                throw new Exception(e.Data);
+                if (e.Data == null)
+                {
+                    return;
+                }
+                OnOutputDataReceived(sender, e);
+                outputResults.Add(e.Data);
             };
 
             try
@@ -55,24 +69,103 @@ namespace UnityBuildAutomation.SourceControl
                 process.BeginErrorReadLine();
 
                 await process.WaitForExitAsync();
+                if (process.ExitCode != 0)
+                {
+                    return (SourceControlResult.Failure, outputResults);
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
-                return SourceControlResult.Failure;
+                Console.WriteLine(ex);
+                return (SourceControlResult.Failure, outputResults);
             }
-            return SourceControlResult.Success;
+            return (SourceControlResult.Success, outputResults);
         }
-        void OnErrorDataReceived(object sender, DataReceivedEventArgs e)
+
+        public async Task<SourceControlResult> CloneRepository()
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine(e.Data);
-            Console.ResetColor();
+            if (Directory.Exists(configuration.GetTargetRepoPath()))
+            {
+                Directory.CreateDirectory(configuration.GetTargetRepoPath());
+            }
+
+            var args = $"clone {configuration.RemoteRepositoryPath} {configuration.GetTargetRepoPath()}/";
+            var result = await RunGitProcess(args);
+            return result.sourceControlResult;
         }
 
         void OnOutputDataReceived(object sender, DataReceivedEventArgs e)
         {
             Console.WriteLine(e.Data);
+        }
+
+        public async Task<bool> IsOnMaster()
+        {
+            var arguments = $"-C \"{configuration.GetTargetRepoPath()}\" rev-parse --abbrev-ref HEAD";
+            var result = await RunGitProcess(arguments);
+            if (result.sourceControlResult == SourceControlResult.Failure)
+            {
+                return false;
+            }
+            if (result.outputResults.Count == 0)
+            {
+                return false;
+            }
+            return result.outputResults.FirstOrDefault() == configuration.MasterBranchName;
+        }
+
+        public async Task<SourceControlResult> Checkout(string branchName, bool ignoredChanges = false)
+        {
+            var arguments = $"-C {configuration.GetTargetRepoPath()} checkout {branchName}";
+            if (ignoredChanges)
+            {
+                arguments += " -f";
+            }
+            var result = await RunGitProcess(arguments);
+            return result.sourceControlResult;
+        }
+
+        internal async Task<SourceControlResult> Prune()
+        {
+            var arguments = $"-C \"{configuration.GetTargetRepoPath()}\" remote prune origin";
+            return (await RunGitProcess(arguments)).sourceControlResult;
+        }
+
+        internal async Task<SourceControlResult> UpdateToBranchLatest(string branchName)
+        {
+            var pruneResult = await Prune();
+            if (pruneResult == SourceControlResult.Failure)
+            {
+                return SourceControlResult.Failure;
+            }
+            Thread.Sleep(1000);
+            var fetchResult = await Fetch(branchName);
+            if (fetchResult == SourceControlResult.Failure)
+            {
+                return SourceControlResult.Failure;
+            }
+            Thread.Sleep(1000);
+            return await ResetToHead(branchName);
+        }
+        internal async Task<SourceControlResult> Pull(string branchName)
+        {
+            var arguments = $"-C \"{configuration.GetTargetRepoPath()}\" pull";
+            var result = await RunGitProcess(arguments);
+            return result.sourceControlResult;
+        }
+
+        internal async Task<SourceControlResult> ResetToHead(string branchName)
+        {
+            var arguments = $"-C \"{configuration.GetTargetRepoPath()}\" reset --hard origin/{branchName}";
+            var result = await RunGitProcess(arguments);
+            return result.sourceControlResult;
+        }
+
+        internal async Task<SourceControlResult> Fetch(string branchName)
+        {
+            var arguments = $"-C \"{configuration.GetTargetRepoPath()}\" fetch origin {branchName}";
+            var result = await RunGitProcess(arguments);
+            return result.sourceControlResult;
         }
     }
 }

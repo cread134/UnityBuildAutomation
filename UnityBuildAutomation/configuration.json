@@ -1,3 +1,7 @@
 {
-  
+  "RemoteRepositoryPath": "https://github.com/Playmakers-Development-Team/PDT2024",
+  "RemoteRepositoryName": "PDT2024",
+  "RepositoryRootDirectory": "C:/GameDevelopment/BuildAutomation/Source/",
+  "MasterBranchName": "master",
+  "UnityExecutablePath": "C:/Program Files/Unity/Hub/Editor/2022.3.29f1/Editor/Unity.exe"
 }

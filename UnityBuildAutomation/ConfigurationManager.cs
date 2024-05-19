@@ -1,11 +1,10 @@
 ﻿using Newtonsoft.Json;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace UnityBuildAutomation
 {
     internal class ConfigurationManager
     {
-        static string ConfigurationPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "configuration.json");
+        public static string ConfigurationPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "configuration.json");
         public static Configuration LoadConfiguration()
         {
             if (!File.Exists(ConfigurationPath))
